@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  LabComponentInventory - Track C (Serverless Architecture)
+  Amazon DynamoDB + Least-Privilege IAM + AWS Lambda (Go provided.al2023) + API Gateway HTTP API
+
+Parameters:
+  TableName:
+    Type: String
+    Default: LabComponentInventory
+    Description: Name of the DynamoDB table
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket containing the compiled Lambda bootstrap.zip
+  CodeS3Key:
+    Type: String
+    Default: bootstrap.zip
+    Description: S3 object key for the Lambda deployment package
+
+Resources:
+  # 1. Amazon DynamoDB (Single Table, On-Demand)
+  LabComponentTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: item_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: item_id
+          KeyType: HASH
+
+  # 2. IAM Execution Role (Least Privilege)
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LabComponentDynamoDBLeastPrivilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt LabComponentTable.Arn
+
+  # 3. AWS Lambda (Go Runtime: provided.al2023, Default Managed Networking)
+  LabInventoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-api'
+      Runtime: provided.al2023
+      Handler: bootstrap
+      Architectures:
+        - x86_64
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 10
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref LabComponentTable
+
+  # 4. Amazon API Gateway (HTTP API v2 + CORS)
+  LabInventoryHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-http-api'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+  LabInventoryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LabInventoryFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  RoutePostItems:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      RouteKey: 'POST /items'
+      Target: !Sub 'integrations/${LabInventoryIntegration}'
+
+  RouteGetItems:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      RouteKey: 'GET /items'
+      Target: !Sub 'integrations/${LabInventoryIntegration}'
+
+  RouteGetItemById:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      RouteKey: 'GET /items/{id}'
+      Target: !Sub 'integrations/${LabInventoryIntegration}'
+
+  RoutePutItemById:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      RouteKey: 'PUT /items/{id}'
+      Target: !Sub 'integrations/${LabInventoryIntegration}'
+
+  RouteDeleteItemById:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      RouteKey: 'DELETE /items/{id}'
+      Target: !Sub 'integrations/${LabInventoryIntegration}'
+
+  DefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref LabInventoryHttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LabInventoryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LabInventoryHttpApi}/*/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: Public HTTPS Endpoint for Amazon API Gateway HTTP API
+    Value: !GetAtt LabInventoryHttpApi.ApiEndpoint
+  TableName:
+    Description: Amazon DynamoDB Table Name
+    Value: !Ref LabComponentTable
+  LambdaFunctionName:
+    Description: AWS Lambda Function Name
+    Value: !Ref LabInventoryFunction
+  LambdaRoleArn:
+    Description: Least-Privilege IAM Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
