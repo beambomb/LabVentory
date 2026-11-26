@@ -11,19 +11,58 @@ Sistem manajemen inventaris komponen elektronika berbasis cloud *serverless* unt
 
 ```mermaid
 flowchart LR
-    User["Asisten Lab (Browser)"] -->|HTTPS + JSON| APIGW["Amazon API Gateway (HTTP API v2 + CORS)"]
-    APIGW -->|APIGatewayV2HTTPRequest| Lambda["AWS Lambda (Go provided.al2023 / bootstrap)"]
-    Lambda -->|AWS SDK v2 + IAM Least Privilege| DDB[("Amazon DynamoDB: LabComponentInventory")]
+    User["Asisten Lab (Client / Browser)"] -->|HTTPS + JSON| Entry["API Gateway HTTP API / Lambda Function URL (CORS)"]
+    Entry -->|APIGatewayV2HTTPRequest| Lambda["AWS Lambda (Go provided.al2023 / bootstrap)"]
+    Lambda -->|AWS SDK v2 + IAM Role| DDB[("Amazon DynamoDB: LabComponentInventory")]
     Lambda -->|Execution Logs| CW["Amazon CloudWatch Logs"]
-    S3["Amazon S3 (Static Hosting)"] -.->|Serves React SPA| User
+    S3["Amazon S3 (Static Hosting - Planned)"] -.->|Serves React SPA| User
 ```
 
-- **Frontend Client (React SPA):** Vite + React + TypeScript untuk menampilkan tabel inventaris, indikator stok menipis (`stock_qty <= min_stock`), serta form tambah, edit, dan hapus komponen. Dapat dijalankan lokal maupun di-host statis di Amazon S3.
-- **Amazon API Gateway (HTTP API):** Endpoint publik HTTPS dengan konfigurasi CORS (`Access-Control-Allow-Origin: *`), meneruskan request ke AWS Lambda.
+- **HTTPS Entrypoint:**
+  - **Target / Production:** **Amazon API Gateway (HTTP API v2)** dengan CORS (`Access-Control-Allow-Origin: *`).
+  - **AWS Academy Cloud Foundations Sandbox:** **AWS Lambda Function URL (HTTPS + CORS)** karena kebijakan IAM Sandbox membatasi `apigateway:POST` (menggunakan event payload `APIGatewayV2HTTPRequest` yang identik tanpa mengubah kode Go).
 - **AWS Lambda (Go Runtime — `provided.al2023`):** Binary Linux (`bootstrap`) menggunakan Go dan AWS SDK for Go v2 dengan arsitektur *Separation of Concerns*.
-- **Amazon DynamoDB:** Database NoSQL serverless dengan satu tabel `LabComponentInventory` menggunakan mode kapasitas **On-Demand** (`PAY_PER_REQUEST`).
-- **IAM Execution Role:** Prinsip *least privilege*, hanya mengizinkan `dynamodb:PutItem`, `dynamodb:GetItem`, `dynamodb:Scan`, `dynamodb:UpdateItem`, `dynamodb:DeleteItem` pada tabel terkait serta pengiriman log ke CloudWatch.
-- **Jaringan:** Menggunakan jaringan terkelola default AWS tanpa VPC kustom maupun NAT Gateway untuk *cold-start* rendah dan biaya operasional mendekati nol.
+- **Amazon DynamoDB:** Database NoSQL serverless dengan satu tabel tunggal `LabComponentInventory` menggunakan mode kapasitas **On-Demand** (`PAY_PER_REQUEST`).
+- **IAM Execution Role:** Prinsip *least privilege* pada `template.yaml` (`PutItem`, `GetItem`, `Scan`, `UpdateItem`, `DeleteItem` + CloudWatch Logs), serta dukungan `ExistingRoleArn` (`LabRole`) untuk AWS Academy Sandbox.
+- **Jaringan:** Menggunakan jaringan terkelola default AWS tanpa VPC kustom maupun NAT Gateway untuk *cold-start* rendah dan biaya operasional minimal.
+- **Frontend Client (React SPA):** Vite + React + TypeScript untuk tabel inventaris, indikator stok menipis (`stock_qty <= min_stock`), serta form tambah, edit, dan hapus komponen *(dalam tahap pengembangan)*.
+
+---
+
+## Development Checklist
+
+### 1. Repository & Documentation
+- [x] Inisialisasi repositori Git & struktur folder *Separation of Concerns*
+- [x] Progress tracker ([docs/progress_backend.md](docs/progress_backend.md) & [docs/progress_frontend.md](docs/progress_frontend.md))
+- [x] Dokumentasi README, skema data, dan kontrak API
+- [ ] Design Brief 1–2 halaman (`docs/design-brief.md`)
+- [ ] Deployment Plan (`docs/deployment-plan.md`)
+
+### 2. Backend Core (Go + AWS Lambda + DynamoDB)
+- [x] Environment configuration loader (`internal/config/`)
+- [x] Standardized domain & API errors (`internal/apperror/`)
+- [x] Entity model `Component`, enums, & input validation (`internal/model/`) + unit tests
+- [x] Repository interface, In-Memory seed store, & DynamoDB AWS SDK v2 (`internal/repository/`)
+- [x] Business logic service & ISO 8601 timestamping (`internal/service/`) + unit tests
+- [x] CORS, CloudWatch logging, & panic recovery middlewares (`internal/middleware/`)
+- [x] CRUD handlers & JSON response helpers (`internal/handler/`)
+- [x] API Gateway v2 route dispatcher (`internal/route/`) + unit tests
+- [x] Entrypoints AWS Lambda `provided.al2023` (`cmd/lambda/`) & local demo server (`cmd/local/`)
+- [x] Verifikasi `go test -v ./...` & cross-compile `GOOS=linux GOARCH=amd64` (`bootstrap`)
+
+### 3. Infrastructure & AWS Connectivity
+- [x] CloudFormation template (`infra/template.yaml`) untuk DynamoDB, IAM, Lambda, API Gateway / Function URL
+- [x] Skrip build binary Lambda (`infra/build.ps1`)
+- [x] Skrip deploy AWS CLI dengan dukungan `LabRole` Sandbox (`infra/deploy.ps1`)
+- [x] Skrip uji konektivitas CRUD otomatis (`infra/verify.ps1`)
+- [x] Verifikasi deploy & konektivitas CRUD live di AWS Sandbox (`us-east-1`) + CloudWatch Logs
+
+### 4. Frontend Client (React + TypeScript SPA)
+- [ ] Scaffold Vite + React + TypeScript (`vite.config.ts`, `tsconfig.json`, `index.html`)
+- [ ] TypeScript contracts & API client (`src/types/`, `src/api/`)
+- [ ] Pure helpers & custom hook `useInventory` (`src/utils/`, `src/hooks/`)
+- [ ] Dashboard UI: `StatsBar`, `InventoryTable` (`stock_qty <= min_stock`), & modal CRUD (`src/components/`)
+- [ ] Integrasi end-to-end dengan endpoint AWS & build produksi untuk S3 static hosting
 
 ---
 
@@ -59,34 +98,29 @@ Seluruh respons mengembalikan format JSON dengan header CORS (`Access-Control-Al
 
 ---
 
-## Struktur Proyek (Separation of Concerns)
+## Cara Menjalankan & Deployment
 
-```text
-LabVentory/
-├── backend/
-│   ├── cmd/
-│   │   ├── lambda/          # Entrypoint AWS Lambda (provided.al2023)
-│   │   └── local/           # HTTP server lokal untuk demo tanpa AWS
-│   └── internal/
-│       ├── config/          # Environment variable loader
-│       ├── apperror/        # Standardized domain & API errors
-│       ├── model/           # Entity Component, enums & validasi input
-│       ├── repository/      # Interface & implementasi DynamoDB / In-Memory
-│       ├── service/         # Business logic & timestamping
-│       ├── middleware/      # CORS, CloudWatch logging, panic recovery
-│       ├── handler/         # CRUD controllers & JSON response helpers
-│       └── route/           # API Gateway v2 route dispatcher
-├── frontend/                # React + TypeScript SPA (Vite)
-├── infra/                   # CloudFormation template & skrip deploy AWS CLI
-└── docs/                    # Progress tracker, architecture, & design brief
+### Uji Lokal (Tanpa AWS)
+```powershell
+# 1. Jalankan unit test backend
+cd backend
+go test -v ./...
+
+# 2. Jalankan local demo server (port 8080, in-memory store)
+go run ./cmd/local
+
+# 3. Uji seluruh endpoint CRUD lokal (terminal baru)
+.\infra\verify.ps1 -ApiUrl "http://localhost:8080"
 ```
 
----
+### Deploy & Uji Konektivitas di AWS
+```powershell
+# Mode AWS Academy Cloud Foundations Sandbox (menggunakan LabRole & Lambda Function URL)
+.\infra\deploy.ps1 -UseLabRole -EndpointMode FunctionUrl
 
-## Menjalankan Secara Lokal & Deployment
+# Mode AWS Learner Lab / Akun AWS Penuh (menggunakan API Gateway HTTP API)
+.\infra\deploy.ps1 -UseLabRole -EndpointMode ApiGateway
 
-- **Progress Implementasi:** Lihat [docs/progress_backend.md](docs/progress_backend.md) dan [docs/progress_frontend.md](docs/progress_frontend.md).
-- **Backend Tests:** `cd backend && go test -v ./...`
-- **Local Demo Server:** `cd backend && go run ./cmd/local`
-- **Frontend Dev:** `cd frontend && npm run dev`
-- **AWS Deploy:** Jalankan `infra/build.ps1` lalu `infra/deploy.ps1` menggunakan AWS CLI.
+# Uji seluruh endpoint CRUD ke URL hasil output deploy
+.\infra\verify.ps1 -ApiUrl "<ApiEndpoint-dari-output-deploy>"
+```
