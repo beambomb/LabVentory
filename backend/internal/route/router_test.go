@@ -80,6 +80,20 @@ func TestRouter_CRUDEndpoints(t *testing.T) {
 		t.Fatalf("expected 404 Not Found, got %d", notFoundResp.StatusCode)
 	}
 
+	// 4.5 POST /items/{id}/upload-url -> 200 OK & 404 Not Found
+	uploadResp, _ := router(ctx, makeReq(http.MethodPost, "/items/CMP-001/upload-url", `{"filename":"stm32.png","content_type":"image/png"}`))
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on upload-url, got %d (%s)", uploadResp.StatusCode, uploadResp.Body)
+	}
+	var uploadOut model.UploadURLOutput
+	if err := json.Unmarshal([]byte(uploadResp.Body), &uploadOut); err != nil || uploadOut.ImageKey != "items/CMP-001/stm32.png" {
+		t.Fatalf("unexpected upload-url output: %+v, err=%v", uploadOut, err)
+	}
+	uploadMissingResp, _ := router(ctx, makeReq(http.MethodPost, "/items/CMP-999/upload-url", `{"filename":"stm32.png","content_type":"image/png"}`))
+	if uploadMissingResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing item upload-url, got %d", uploadMissingResp.StatusCode)
+	}
+
 	// 5. PUT /items/{id} -> 200 OK
 	updateResp, _ := router(ctx, makeReq(http.MethodPut, "/items/CMP-001", `{"stock_qty":3,"drawer_location":"RAK-B1","condition":"DEFECTIVE"}`))
 	if updateResp.StatusCode != http.StatusOK {

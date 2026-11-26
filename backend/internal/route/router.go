@@ -30,7 +30,19 @@ func NewRouter(itemHandler *handler.ItemHandler) middleware.HandlerFunc {
 		}
 
 		if strings.HasPrefix(path, "/items/") {
-			id := strings.TrimPrefix(path, "/items/")
+			rest := strings.TrimPrefix(path, "/items/")
+			if strings.HasSuffix(rest, "/upload-url") {
+				id := strings.TrimSuffix(rest, "/upload-url")
+				if id == "" || strings.Contains(id, "/") {
+					return handler.Error(apperror.NotFound("route not found")), nil
+				}
+				if method != http.MethodPost {
+					return handler.Error(apperror.BadRequest("method not allowed for /items/{id}/upload-url")), nil
+				}
+				return itemHandler.CreateImageUploadURL(ctx, req, id)
+			}
+
+			id := rest
 			if id == "" || strings.Contains(id, "/") {
 				return handler.Error(apperror.NotFound("route not found")), nil
 			}
