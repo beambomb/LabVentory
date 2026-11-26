@@ -46,6 +46,28 @@ Resources:
         - AttributeName: item_id
           KeyType: HASH
 
+  # 1B. Amazon S3 (Private Bucket for Component Photos with CORS)
+  LabImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-images-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - HEAD
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3600
+
   # 2. IAM Execution Role (Least Privilege)
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -74,6 +96,12 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
                 Resource: !GetAtt LabComponentTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub '${LabImagesBucket.Arn}/*'
 
   # 3. AWS Lambda (Go Runtime: provided.al2023, Default Managed Networking)
   LabInventoryFunction:
@@ -93,6 +121,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref LabComponentTable
+          IMAGES_BUCKET: !Ref LabImagesBucket
 
   # 4A. Amazon API Gateway (HTTP API v2 + CORS) - when EndpointMode=ApiGateway
   LabInventoryHttpApi:
@@ -229,3 +258,6 @@ Outputs:
   LambdaRoleArn:
     Description: IAM Execution Role ARN attached to Lambda
     Value: !If [CreateNewRole, !GetAtt LambdaExecutionRole.Arn, !Ref ExistingRoleArn]
+  ImagesBucketName:
+    Description: Private Amazon S3 Bucket for Component Photos
+    Value: !Ref LabImagesBucket
