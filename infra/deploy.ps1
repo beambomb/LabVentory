@@ -29,8 +29,13 @@ $S3Key = "lambda/bootstrap-$(Get-Date -Format 'yyyyMMddHHmmss').zip"
 
 # 3. Ensure artifact bucket exists
 Write-Host "Ensuring S3 artifact bucket s3://$BucketName exists..." -ForegroundColor Cyan
-aws s3api head-bucket --bucket $BucketName --region $Region 2>$null
-if ($LASTEXITCODE -ne 0) {
+$prevPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+aws s3api head-bucket --bucket $BucketName --region $Region *> $null
+$bucketExists = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $prevPref
+
+if (-not $bucketExists) {
     if ($Region -eq "us-east-1") {
         aws s3api create-bucket --bucket $BucketName --region $Region | Out-Null
     } else {
