@@ -15,6 +15,13 @@ Parameters:
     Type: String
     Default: bootstrap.zip
     Description: S3 object key for the Lambda deployment package
+  ExistingRoleArn:
+    Type: String
+    Default: ''
+    Description: Optional existing IAM Role ARN (e.g., AWS Academy LabRole) to bypass iam:CreateRole
+
+Conditions:
+  CreateNewRole: !Equals [!Ref ExistingRoleArn, '']
 
 Resources:
   # 1. Amazon DynamoDB (Single Table, On-Demand)
@@ -33,6 +40,7 @@ Resources:
   # 2. IAM Execution Role (Least Privilege)
   LambdaExecutionRole:
     Type: AWS::IAM::Role
+    Condition: CreateNewRole
     Properties:
       RoleName: !Sub '${AWS::StackName}-lambda-role'
       AssumeRolePolicyDocument:
@@ -67,7 +75,7 @@ Resources:
       Handler: bootstrap
       Architectures:
         - x86_64
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !If [CreateNewRole, !GetAtt LambdaExecutionRole.Arn, !Ref ExistingRoleArn]
       MemorySize: 128
       Timeout: 10
       Code:
@@ -165,5 +173,5 @@ Outputs:
     Description: AWS Lambda Function Name
     Value: !Ref LabInventoryFunction
   LambdaRoleArn:
-    Description: Least-Privilege IAM Execution Role ARN
-    Value: !GetAtt LambdaExecutionRole.Arn
+    Description: IAM Execution Role ARN attached to Lambda
+    Value: !If [CreateNewRole, !GetAtt LambdaExecutionRole.Arn, !Ref ExistingRoleArn]

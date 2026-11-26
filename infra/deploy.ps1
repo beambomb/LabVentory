@@ -1,6 +1,8 @@
 param(
     [string]$StackName = "lab-component-inventory",
-    [string]$Region = "ap-southeast-1"
+    [string]$Region = "us-east-1",
+    [string]$ExistingRoleArn = "",
+    [switch]$UseLabRole
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +16,11 @@ Write-Host "=== LabComponentInventory AWS Deployment ===" -ForegroundColor Cyan
 $AccountId = aws sts get-caller-identity --query Account --output text --region $Region
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($AccountId)) {
     throw "AWS CLI is not configured. Run 'aws configure' first."
+}
+
+if ($UseLabRole -and [string]::IsNullOrWhiteSpace($ExistingRoleArn)) {
+    $ExistingRoleArn = "arn:aws:iam::${AccountId}:role/LabRole"
+    Write-Host "Using AWS Academy LabRole: $ExistingRoleArn" -ForegroundColor Yellow
 }
 
 $BucketName = "labventroy-artifacts-$AccountId-$Region"
@@ -37,12 +44,20 @@ aws s3 cp $ZipPath "s3://$BucketName/$S3Key" --region $Region
 
 # 5. Deploy CloudFormation stack
 Write-Host "Deploying CloudFormation stack '$StackName'..." -ForegroundColor Cyan
+$Params = @(
+    "CodeS3Bucket=$BucketName",
+    "CodeS3Key=$S3Key"
+)
+if (-not [string]::IsNullOrWhiteSpace($ExistingRoleArn)) {
+    $Params += "ExistingRoleArn=$ExistingRoleArn"
+}
+
 aws cloudformation deploy `
     --template-file (Join-Path $PSScriptRoot "template.yaml") `
     --stack-name $StackName `
     --region $Region `
     --capabilities CAPABILITY_NAMED_IAM `
-    --parameter-overrides CodeS3Bucket=$BucketName CodeS3Key=$S3Key
+    --parameter-overrides $Params
 
 if ($LASTEXITCODE -ne 0) {
     throw "CloudFormation deployment failed"
