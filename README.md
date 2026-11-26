@@ -11,11 +11,15 @@ Sistem manajemen inventaris komponen elektronika berbasis cloud *serverless* unt
 
 ```mermaid
 flowchart LR
-    User["Asisten Lab (Client / Browser)"] -->|HTTPS + JSON| Entry["AWS Lambda Function URL (CORS)"]
-    Entry -->|APIGatewayV2HTTPRequest| Lambda["AWS Lambda (Go provided.al2023 / bootstrap)"]
-    Lambda -->|AWS SDK v2 + IAM Role| DDB[("Amazon DynamoDB: LabComponentInventory")]
-    Lambda -->|Execution Logs| CW["Amazon CloudWatch Logs"]
-    S3["Amazon S3 (Static Hosting - Planned)"] -.->|Serves React SPA| User
+    User["Client<br/>Asisten Lab"] <-->|"1. HTTPS JSON"| Entry["Lambda Function URL<br/>POST /items<br/>GET /items<br/>GET /items/{id}<br/>PUT /items/{id}<br/>DELETE /items/{id}"]
+
+    subgraph AWS["AWS Cloud (Default AWS Managed Network)"]
+        direction LR
+        Entry <-->|"2. Invoke"| Lambda["AWS Lambda<br/>CRUD Logic & Validation"]
+        IAM["IAM Execution Role<br/>Least Privilege<br/>- AWSLambdaBasicExecutionRole<br/>- DynamoDB CRUD Policy"] -.->|"Assume Role"| Lambda
+        Lambda <-->|"3. CRUD Ops"| DDB[("Amazon DynamoDB<br/>Table: LabComponentInventory<br/>PK: item_id<br/>Mode: On-Demand")]
+        Lambda -.->|"Write Logs"| CW["Amazon CloudWatch<br/>Execution Logs"]
+    end
 ```
 
 - **HTTPS Entrypoint:** **AWS Lambda Function URL** dengan konfigurasi CORS (`Access-Control-Allow-Origin: *`) yang meneruskan request HTTPS langsung ke fungsi AWS Lambda.
