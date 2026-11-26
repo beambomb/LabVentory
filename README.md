@@ -11,16 +11,14 @@ Sistem manajemen inventaris komponen elektronika berbasis cloud *serverless* unt
 
 ```mermaid
 flowchart LR
-    User["Asisten Lab (Client / Browser)"] -->|HTTPS + JSON| Entry["API Gateway HTTP API / Lambda Function URL (CORS)"]
+    User["Asisten Lab (Client / Browser)"] -->|HTTPS + JSON| Entry["AWS Lambda Function URL (CORS)"]
     Entry -->|APIGatewayV2HTTPRequest| Lambda["AWS Lambda (Go provided.al2023 / bootstrap)"]
     Lambda -->|AWS SDK v2 + IAM Role| DDB[("Amazon DynamoDB: LabComponentInventory")]
     Lambda -->|Execution Logs| CW["Amazon CloudWatch Logs"]
     S3["Amazon S3 (Static Hosting - Planned)"] -.->|Serves React SPA| User
 ```
 
-- **HTTPS Entrypoint:**
-  - **Target / Production:** **Amazon API Gateway (HTTP API v2)** dengan CORS (`Access-Control-Allow-Origin: *`).
-  - **AWS Academy Cloud Foundations Sandbox:** **AWS Lambda Function URL (HTTPS + CORS)** karena kebijakan IAM Sandbox membatasi `apigateway:POST` (menggunakan event payload `APIGatewayV2HTTPRequest` yang identik tanpa mengubah kode Go).
+- **HTTPS Entrypoint:** **AWS Lambda Function URL** dengan konfigurasi CORS (`Access-Control-Allow-Origin: *`) yang meneruskan request HTTPS langsung ke fungsi AWS Lambda.
 - **AWS Lambda (Go Runtime — `provided.al2023`):** Binary Linux (`bootstrap`) menggunakan Go dan AWS SDK for Go v2 dengan arsitektur *Separation of Concerns*.
 - **Amazon DynamoDB:** Database NoSQL serverless dengan satu tabel tunggal `LabComponentInventory` menggunakan mode kapasitas **On-Demand** (`PAY_PER_REQUEST`).
 - **IAM Execution Role:** Prinsip *least privilege* pada `template.yaml` (`PutItem`, `GetItem`, `Scan`, `UpdateItem`, `DeleteItem` + CloudWatch Logs), serta dukungan `ExistingRoleArn` (`LabRole`) untuk AWS Academy Sandbox.
