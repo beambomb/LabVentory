@@ -19,9 +19,18 @@ Parameters:
     Type: String
     Default: ''
     Description: Optional existing IAM Role ARN (e.g., AWS Academy LabRole) to bypass iam:CreateRole
+  EndpointMode:
+    Type: String
+    Default: ApiGateway
+    AllowedValues:
+      - ApiGateway
+      - FunctionUrl
+    Description: Public HTTPS trigger (ApiGateway for Learner Lab/prod, FunctionUrl for Cloud Foundations Sandbox)
 
 Conditions:
   CreateNewRole: !Equals [!Ref ExistingRoleArn, '']
+  UseApiGateway: !Equals [!Ref EndpointMode, 'ApiGateway']
+  UseFunctionUrl: !Equals [!Ref EndpointMode, 'FunctionUrl']
 
 Resources:
   # 1. Amazon DynamoDB (Single Table, On-Demand)
@@ -85,9 +94,10 @@ Resources:
         Variables:
           TABLE_NAME: !Ref LabComponentTable
 
-  # 4. Amazon API Gateway (HTTP API v2 + CORS)
+  # 4A. Amazon API Gateway (HTTP API v2 + CORS) - when EndpointMode=ApiGateway
   LabInventoryHttpApi:
     Type: AWS::ApiGatewayV2::Api
+    Condition: UseApiGateway
     Properties:
       Name: !Sub '${AWS::StackName}-http-api'
       ProtocolType: HTTP
@@ -106,6 +116,7 @@ Resources:
 
   LabInventoryIntegration:
     Type: AWS::ApiGatewayV2::Integration
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       IntegrationType: AWS_PROXY
@@ -114,6 +125,7 @@ Resources:
 
   RoutePostItems:
     Type: AWS::ApiGatewayV2::Route
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       RouteKey: 'POST /items'
@@ -121,6 +133,7 @@ Resources:
 
   RouteGetItems:
     Type: AWS::ApiGatewayV2::Route
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       RouteKey: 'GET /items'
@@ -128,6 +141,7 @@ Resources:
 
   RouteGetItemById:
     Type: AWS::ApiGatewayV2::Route
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       RouteKey: 'GET /items/{id}'
@@ -135,6 +149,7 @@ Resources:
 
   RoutePutItemById:
     Type: AWS::ApiGatewayV2::Route
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       RouteKey: 'PUT /items/{id}'
@@ -142,6 +157,7 @@ Resources:
 
   RouteDeleteItemById:
     Type: AWS::ApiGatewayV2::Route
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       RouteKey: 'DELETE /items/{id}'
@@ -149,6 +165,7 @@ Resources:
 
   DefaultStage:
     Type: AWS::ApiGatewayV2::Stage
+    Condition: UseApiGateway
     Properties:
       ApiId: !Ref LabInventoryHttpApi
       StageName: '$default'
@@ -156,16 +173,45 @@ Resources:
 
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
+    Condition: UseApiGateway
     Properties:
       FunctionName: !Ref LabInventoryFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LabInventoryHttpApi}/*/*'
 
+  # 4B. AWS Lambda Function URL (HTTPS + CORS) - when EndpointMode=FunctionUrl
+  LabInventoryFunctionUrl:
+    Type: AWS::Lambda::Url
+    Condition: UseFunctionUrl
+    Properties:
+      TargetFunctionArn: !Ref LabInventoryFunction
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+  LabInventoryFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Condition: UseFunctionUrl
+    Properties:
+      FunctionName: !Ref LabInventoryFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
 Outputs:
   ApiEndpoint:
-    Description: Public HTTPS Endpoint for Amazon API Gateway HTTP API
-    Value: !GetAtt LabInventoryHttpApi.ApiEndpoint
+    Description: Public HTTPS Endpoint (API Gateway or Lambda Function URL)
+    Value: !If [UseApiGateway, !GetAtt LabInventoryHttpApi.ApiEndpoint, !GetAtt LabInventoryFunctionUrl.FunctionUrl]
   TableName:
     Description: Amazon DynamoDB Table Name
     Value: !Ref LabComponentTable

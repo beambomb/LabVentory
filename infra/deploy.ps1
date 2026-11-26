@@ -2,6 +2,8 @@ param(
     [string]$StackName = "lab-component-inventory",
     [string]$Region = "us-east-1",
     [string]$ExistingRoleArn = "",
+    [ValidateSet("ApiGateway", "FunctionUrl")]
+    [string]$EndpointMode = "ApiGateway",
     [switch]$UseLabRole
 )
 
@@ -51,7 +53,8 @@ aws s3 cp $ZipPath "s3://$BucketName/$S3Key" --region $Region
 Write-Host "Deploying CloudFormation stack '$StackName'..." -ForegroundColor Cyan
 $Params = @(
     "CodeS3Bucket=$BucketName",
-    "CodeS3Key=$S3Key"
+    "CodeS3Key=$S3Key",
+    "EndpointMode=$EndpointMode"
 )
 if (-not [string]::IsNullOrWhiteSpace($ExistingRoleArn)) {
     $Params += "ExistingRoleArn=$ExistingRoleArn"
