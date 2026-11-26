@@ -208,6 +208,14 @@ Resources:
       Principal: '*'
       FunctionUrlAuthType: NONE
 
+  LabInventoryFunctionUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: UseFunctionUrl
+    Properties:
+      FunctionName: !Ref LabInventoryFunction
+      Action: lambda:InvokeFunction
+      Principal: '*'
+
 Outputs:
   ApiEndpoint:
     Description: Public HTTPS Endpoint (API Gateway or Lambda Function URL)
