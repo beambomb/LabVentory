@@ -81,3 +81,17 @@ func (h *ItemHandler) DeleteItem(ctx context.Context, _ events.APIGatewayV2HTTPR
 		"item_id": id,
 	}), nil
 }
+
+// CreateImageUploadURL handles POST /items/{id}/upload-url.
+func (h *ItemHandler) CreateImageUploadURL(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) (events.APIGatewayV2HTTPResponse, error) {
+	var input model.UploadURLInput
+	if err := json.Unmarshal([]byte(req.Body), &input); err != nil {
+		return Error(apperror.BadRequest("invalid JSON request body")), nil
+	}
+
+	out, err := h.svc.RequestImageUploadURL(ctx, id, input)
+	if err != nil {
+		return Error(err), nil
+	}
+	return JSON(http.StatusOK, out), nil
+}

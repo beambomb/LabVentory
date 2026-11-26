@@ -54,6 +54,8 @@ type Component struct {
 	MinStock       int       `json:"min_stock" dynamodbav:"min_stock"`
 	DrawerLocation string    `json:"drawer_location" dynamodbav:"drawer_location"`
 	Condition      Condition `json:"condition" dynamodbav:"condition"`
+	ImageKey       string    `json:"image_key,omitempty" dynamodbav:"image_key,omitempty"`
+	ImageURL       string    `json:"image_url,omitempty" dynamodbav:"-"`
 	UpdatedAt      string    `json:"updated_at" dynamodbav:"updated_at"`
 }
 
@@ -66,6 +68,7 @@ type CreateComponentInput struct {
 	MinStock       *int      `json:"min_stock"`
 	DrawerLocation string    `json:"drawer_location"`
 	Condition      Condition `json:"condition"`
+	ImageKey       string    `json:"image_key,omitempty"`
 }
 
 // Validate checks required fields, non-negative quantities, and valid enums.
@@ -108,6 +111,7 @@ func (in CreateComponentInput) ToComponent(updatedAt string) Component {
 		MinStock:       *in.MinStock,
 		DrawerLocation: in.DrawerLocation,
 		Condition:      in.Condition,
+		ImageKey:       strings.TrimSpace(in.ImageKey),
 		UpdatedAt:      updatedAt,
 	}
 }
@@ -120,6 +124,7 @@ type UpdateComponentInput struct {
 	MinStock       *int       `json:"min_stock,omitempty"`
 	DrawerLocation *string    `json:"drawer_location,omitempty"`
 	Condition      *Condition `json:"condition,omitempty"`
+	ImageKey       *string    `json:"image_key,omitempty"`
 }
 
 // Validate ensures at least one field is provided and all supplied fields are valid.
@@ -129,7 +134,8 @@ func (in *UpdateComponentInput) Validate() error {
 		in.StockQty == nil &&
 		in.MinStock == nil &&
 		in.DrawerLocation == nil &&
-		in.Condition == nil {
+		in.Condition == nil &&
+		in.ImageKey == nil {
 		return apperror.Validation("at least one updatable field is required")
 	}
 
@@ -159,5 +165,38 @@ func (in *UpdateComponentInput) Validate() error {
 	if in.Condition != nil && !in.Condition.IsValid() {
 		return apperror.Validation("condition must be one of NEW, GOOD, DEFECTIVE")
 	}
+	if in.ImageKey != nil {
+		trimmed := strings.TrimSpace(*in.ImageKey)
+		in.ImageKey = &trimmed
+	}
 	return nil
+}
+
+// UploadURLInput is the request payload for POST /items/{id}/upload-url.
+type UploadURLInput struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+}
+
+// Validate checks filename and ensures content_type is a supported image format.
+func (in *UploadURLInput) Validate() error {
+	in.Filename = strings.TrimSpace(in.Filename)
+	in.ContentType = strings.TrimSpace(strings.ToLower(in.ContentType))
+
+	if in.Filename == "" {
+		return apperror.Validation("filename is required")
+	}
+	switch in.ContentType {
+	case "image/jpeg", "image/png", "image/webp":
+		return nil
+	default:
+		return apperror.Validation("content_type must be image/jpeg, image/png, or image/webp")
+	}
+}
+
+// UploadURLOutput is returned by POST /items/{id}/upload-url.
+type UploadURLOutput struct {
+	UploadURL string `json:"upload_url"`
+	ImageKey  string `json:"image_key"`
+	ExpiresIn int    `json:"expires_in"`
 }

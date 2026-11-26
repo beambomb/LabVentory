@@ -20,3 +20,8 @@ infra/bootstrap
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+
+# Local submission & diagram files in docs (keep progress trackers)
+docs/*
+!docs/progress_backend.md
+!docs/progress_frontend.md

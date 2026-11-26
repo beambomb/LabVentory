@@ -143,6 +143,11 @@ func (r *DynamoDBRepository) Update(ctx context.Context, id string, input model.
 		exprNames["#condition"] = "condition"
 		exprValues[":condition"] = &types.AttributeValueMemberS{Value: string(*input.Condition)}
 	}
+	if input.ImageKey != nil {
+		setClauses = append(setClauses, "#image_key = :image_key")
+		exprNames["#image_key"] = "image_key"
+		exprValues[":image_key"] = &types.AttributeValueMemberS{Value: *input.ImageKey}
+	}
 
 	out, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(r.tableName),
