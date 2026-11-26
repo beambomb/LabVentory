@@ -144,6 +144,9 @@ func (r *MemoryRepository) Update(_ context.Context, id string, input model.Upda
 	if input.Condition != nil {
 		item.Condition = *input.Condition
 	}
+	if input.ImageKey != nil {
+		item.ImageKey = *input.ImageKey
+	}
 	item.UpdatedAt = updatedAt
 
 	r.items[id] = item
