@@ -141,3 +141,41 @@ func TestUpdateComponentInput_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadURLInput_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   UploadURLInput
+		wantErr bool
+	}{
+		{
+			name:    "valid jpeg",
+			input:   UploadURLInput{Filename: "stm32.jpg", ContentType: "image/jpeg"},
+			wantErr: false,
+		},
+		{
+			name:    "valid png uppercase",
+			input:   UploadURLInput{Filename: "dht22.png", ContentType: "IMAGE/PNG"},
+			wantErr: false,
+		},
+		{
+			name:    "missing filename",
+			input:   UploadURLInput{Filename: "", ContentType: "image/jpeg"},
+			wantErr: true,
+		},
+		{
+			name:    "unsupported content type",
+			input:   UploadURLInput{Filename: "doc.pdf", ContentType: "application/pdf"},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.input.Validate()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+		})
+	}
+}
