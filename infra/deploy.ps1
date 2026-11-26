@@ -60,12 +60,20 @@ if (-not [string]::IsNullOrWhiteSpace($ExistingRoleArn)) {
     $Params += "ExistingRoleArn=$ExistingRoleArn"
 }
 
-aws cloudformation deploy `
-    --template-file (Join-Path $PSScriptRoot "template.yaml") `
-    --stack-name $StackName `
-    --region $Region `
-    --capabilities CAPABILITY_NAMED_IAM `
-    --parameter-overrides $Params
+$DeployArgs = @(
+    "cloudformation", "deploy",
+    "--template-file", (Join-Path $PSScriptRoot "template.yaml"),
+    "--stack-name", $StackName,
+    "--region", $Region,
+    "--capabilities", "CAPABILITY_NAMED_IAM",
+    "--parameter-overrides"
+) + $Params
+
+if (-not [string]::IsNullOrWhiteSpace($ExistingRoleArn)) {
+    $DeployArgs += @("--role-arn", $ExistingRoleArn)
+}
+
+& aws @DeployArgs
 
 if ($LASTEXITCODE -ne 0) {
     throw "CloudFormation deployment failed"
