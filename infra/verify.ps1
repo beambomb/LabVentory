@@ -21,19 +21,19 @@ $CreatePayload = @{
     condition       = "NEW"
 } | ConvertTo-Json
 
-$PostResp = Invoke-WebRequest -Uri "$BaseUrl/items" -Method Post -ContentType "application/json" -Body $CreatePayload
+$PostResp = Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/items" -Method Post -ContentType "application/json" -Body $CreatePayload
 Write-Host "Status: $($PostResp.StatusCode)" -ForegroundColor Green
 Write-Host $PostResp.Content
 
 # 2. GET /items (200 OK)
 Write-Host "`n[2/6] GET /items" -ForegroundColor Yellow
-$ListResp = Invoke-WebRequest -Uri "$BaseUrl/items" -Method Get
+$ListResp = Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/items" -Method Get
 Write-Host "Status: $($ListResp.StatusCode)" -ForegroundColor Green
 Write-Host $ListResp.Content
 
 # 3. GET /items/{id} (200 OK)
 Write-Host "`n[3/6] GET /items/$TestId" -ForegroundColor Yellow
-$GetResp = Invoke-WebRequest -Uri "$BaseUrl/items/$TestId" -Method Get
+$GetResp = Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/items/$TestId" -Method Get
 Write-Host "Status: $($GetResp.StatusCode)" -ForegroundColor Green
 Write-Host $GetResp.Content
 
@@ -45,20 +45,20 @@ $UpdatePayload = @{
     condition       = "GOOD"
 } | ConvertTo-Json
 
-$PutResp = Invoke-WebRequest -Uri "$BaseUrl/items/$TestId" -Method Put -ContentType "application/json" -Body $UpdatePayload
+$PutResp = Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/items/$TestId" -Method Put -ContentType "application/json" -Body $UpdatePayload
 Write-Host "Status: $($PutResp.StatusCode)" -ForegroundColor Green
 Write-Host $PutResp.Content
 
 # 5. DELETE /items/{id} (200 OK)
 Write-Host "`n[5/6] DELETE /items/$TestId" -ForegroundColor Yellow
-$DelResp = Invoke-WebRequest -Uri "$BaseUrl/items/$TestId" -Method Delete
+$DelResp = Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/items/$TestId" -Method Delete
 Write-Host "Status: $($DelResp.StatusCode)" -ForegroundColor Green
 Write-Host $DelResp.Content
 
 # 6. GET /items/{id} after delete (expect 404)
 Write-Host "`n[6/6] GET /items/$TestId (expect 404 Not Found)" -ForegroundColor Yellow
 try {
-    Invoke-WebRequest -Uri "$BaseUrl/items/$TestId" -Method Get | Out-Null
+    Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/items/$TestId" -Method Get | Out-Null
     throw "Expected 404 Not Found, but request succeeded"
 }
 catch {
